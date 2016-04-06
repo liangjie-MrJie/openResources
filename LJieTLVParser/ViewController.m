@@ -18,23 +18,19 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
-    NSString * str = @"00659F360200E0910A6A62305BC18C048A3030711B86198424000114F08967D53F3A7EE980013802BB2B6140EFA7033A7211860F04DA9F790A000000088800002FD39B83020000AAAA";
-    _textView.text = str;
+    
+    const unsigned char bytes[] =
+    {
+        0xe1,0x35,0x9f,0x1e,0x08,0x31,0x36,0x30,0x32,0x31,0x34,0x33,0x37,0xef,0x12,0xdf,
+        0x0d,0x08,0x4d,0x30,0x30,0x30,0x2d,0x4d,0x50,0x49,0xdf,0x7f,0x04,0x31,0x2d,0x32,
+        0x32,0xef,0x14,0xdf,0x0d,0x0b,0x4d,0x30,0x30,0x30,0x2d,0x54,0x45,0x53,0x54,0x4f,
+        0x53,0xdf,0x7f,0x03,0x36,0x2d,0x35,   0x9B, 0x83, 0x02, 0x00, 0x00, 0xAA, 0xAA };
+    
+    NSData *dataTextField = [NSData dataWithBytes:bytes length:sizeof(bytes)];
     
     LJieTLVParser * tlv = [[LJieTLVParser alloc] init];
-    NSData *result = [tlv valueFromTLVString:str tag:@"9F36"];
-    NSLog(@"result: %@", result);
     
-    result = [tlv valueFromTLVString:str tag:@"91"];
-    NSLog(@"result: %@", result);
-    
-    result = [tlv valueFromTLVString:str tag:@"71"];
-    NSLog(@"result: %@", result);
-    
-    result = [tlv valueFromTLVString:str tag:@"72"];
-    NSLog(@"result: %@", result);
-    
-    result = [tlv valueFromTLVString:str tag:@"9b"];
+    NSData *result = [tlv valueFromTLVData:dataTextField tag:@"df0d"];
     NSLog(@"result: %@", result);
 }
 

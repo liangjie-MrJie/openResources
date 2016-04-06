@@ -10,6 +10,13 @@
 
 static const char hexdigits[] = "0123456789ABCDEF";
 
+@implementation TLV
+- (NSString *)description {
+    return [NSString stringWithFormat:@"tag: %@\nlength: %@\nvalue: %@\nisNesting: %@", self.t, self.l, self.v, self.isNesting?@"YES":@"NO"];
+}
+
+@end
+
 @implementation LJieTLVParser
 
 - (NSData *)valueFromTLVString:(NSString *)tlvString tag:(NSString *)tag
@@ -18,35 +25,114 @@ static const char hexdigits[] = "0123456789ABCDEF";
 }
 
 - (NSData *)valueFromTLVData:(NSData *)tlvData tag:(NSString *)tag {
-    const Byte *tlvByte = [tlvData bytes];
+
+    NSArray *tlvs = [self tlvObjectsFromTLVData:tlvData];
     NSData *tagData = [self hexStringToData:tag strLen:tag.length];
-    NSRange range = [tlvData rangeOfData:tagData options:NSDataSearchBackwards range:NSMakeRange(0, tlvData.length)];
-    if (range.location != NSNotFound) {
-        NSUInteger lenIndex = range.location +range.length;
-        Byte len = tlvByte[lenIndex];
-        if (len & 128) {
-            // len is many byte
-            NSUInteger addLen = len & 127;
-            NSData *lenData = [tlvData subdataWithRange:NSMakeRange(lenIndex +1, addLen)];
-            NSUInteger lenResult = 0;
-            [lenData getBytes:&lenResult length:addLen];
-            NSUInteger valueIndex = lenIndex + addLen + 1;
-            if (tlvData.length -valueIndex >= lenResult) {
-                NSData *value = [tlvData subdataWithRange:NSMakeRange(valueIndex, lenResult)];
-                return value;
-            }
+    
+    return [self searchValue:tlvs tag:tagData];
+}
+
+- (NSArray *)tlvObjectsFromTLVString:(NSString *)tlvString {
+    return [self tlvObjectsFromTLVData:[self hexStringToData:tlvString strLen:tlvString.length]];
+}
+- (NSArray *)tlvObjectsFromTLVData:(NSData *)tlvData {
+    
+    NSMutableArray *mArray = [[NSMutableArray alloc] init];
+    
+    while (tlvData.length > 0) {
+        
+        NSData *tagData = nil;
+        NSData *lengthData = nil;
+        NSData *valueData = nil;
+        
+        int tagBytesCount = [self calcTagBytesCount:tlvData];
+        if (tlvData.length >= tagBytesCount) {
+            tagData = [tlvData subdataWithRange:NSMakeRange(0, tagBytesCount)];
+            // progress
+            tlvData = [tlvData subdataWithRange:NSMakeRange(tagBytesCount, tlvData.length - tagBytesCount)];
         }
-        else {
-            // len is one byte
-            NSUInteger valueIndex = lenIndex + 1;
-            if (tlvData.length -valueIndex >= len) {
-                NSData *value = [tlvData subdataWithRange:NSMakeRange(valueIndex, len)];
-                return value;
-            }
+        
+        int lengthBytesCount = [self calcLengthBytesCount:tlvData];
+        if (tlvData.length >= lengthBytesCount) {
+            NSUInteger index = lengthBytesCount > 1 ? 1 : 0;
+            NSUInteger len   = lengthBytesCount > 1 ? (lengthBytesCount-1) : lengthBytesCount;
+            lengthData = [tlvData subdataWithRange:NSMakeRange(index, len)];
+            // progress
+            tlvData = [tlvData subdataWithRange:NSMakeRange(lengthBytesCount, tlvData.length - lengthBytesCount)];
         }
+        
+        NSUInteger valueLength = 0;
+        [lengthData getBytes:&valueLength length:lengthData.length];
+        if (tlvData.length >= valueLength) {
+            valueData = [tlvData subdataWithRange:NSMakeRange(0, valueLength)];
+            // progress
+            tlvData = [tlvData subdataWithRange:NSMakeRange(valueLength, tlvData.length - valueLength)];
+        }
+        
+        TLV *tlv = [[TLV alloc] init];
+        tlv.t = tagData;
+        tlv.l = lengthData;
+        tlv.v = valueData;
+        
+        if ([self isNesting:tagData])
+        {
+            tlv.isNesting = YES;
+            tlv.nestingTlvs = [self tlvObjectsFromTLVData:valueData];
+        }
+        
+        [mArray addObject:tlv];
     }
     
-    return nil;
+    return [mArray copy];
+}
+
+
+
+#pragma mark -- private method
+- (int)calcTagBytesCount:(NSData *)tlvData
+{
+    NSAssert(tlvData.length != 0, @"tlvData.length si error!");
+    uint8_t const *bytes = tlvData.bytes;
+    if((bytes[0] & 0x1F) == 0x1F)
+    { // see subsequent bytes
+        int len = 2;
+        for(int i=1; i<10; i++)
+        {
+            if( (bytes[i] & 0x80) != 0x80)
+            {
+                break;
+            }
+            len++;
+        }
+        return len;
+    }
+    else
+    {
+        return 1;
+    }
+}
+- (BOOL)isNesting:(NSData *)tagData
+{
+    NSAssert(tagData.length != 0, @"tagData.length si error!");
+    uint8_t *bytes = (uint8_t *) tagData.bytes;
+    // 0x20
+    //return (bytes[0] & 0b00100000) != 0;
+    return (bytes[0] & 0x20) != 0;
+}
+- (int)calcLengthBytesCount:(NSData *)tlvData
+{
+    NSAssert(tlvData.length != 0, @"tlvData.length si error!");
+    uint8_t const *bytes = tlvData.bytes;
+    int len = (int) bytes[0];
+    if( (len & 0x80) == 0x80)
+    {
+        tlvData = [tlvData subdataWithRange:NSMakeRange(1, tlvData.length-1)];
+        return (int) (1 + (len & 0x7f));
+    }
+    else
+    {
+        return 1;
+    }
 }
 
 - (NSString*)hexStringFromData:(NSData*)data{
@@ -67,7 +153,6 @@ static const char hexdigits[] = "0123456789ABCDEF";
     
     return hexBytes;
 }
-
 - (NSData *)hexStringToData:(NSString *)hexStr strLen:(NSUInteger)strLen
 {
     NSUInteger asciiLen = strLen/2;
@@ -95,6 +180,19 @@ static const char hexdigits[] = "0123456789ABCDEF";
     return data;
 }
 
+- (NSData *)searchValue:(NSArray *)tlvs tag:(NSData *)tagData {
+    for (TLV *tlv in tlvs) {
+        if ([tagData isEqualToData:tlv.t])
+            return tlv.v;
+        if (tlv.isNesting) {
+            NSData *value = [self searchValue:tlv.nestingTlvs tag:tagData];
+            if (value) return value;
+        }
+        continue;
+    }
+    
+    return nil;
+}
 
 @end
 

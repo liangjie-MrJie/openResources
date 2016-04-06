@@ -8,6 +8,18 @@
 
 #import <Foundation/Foundation.h>
 
+/**
+ *  TLV对象
+ */
+@interface TLV : NSObject
+@property (nonatomic, strong) NSData *t;
+@property (nonatomic, strong) NSData *l;
+@property (nonatomic, strong) NSData *v;
+@property (nonatomic, assign) BOOL isNesting;
+@property (nonatomic, strong) NSArray *nestingTlvs;
+@end
+
+
 @interface LJieTLVParser : NSObject
 
 /**
@@ -29,5 +41,22 @@
  *  @return 标签中的值
  */
 - (NSData *)valueFromTLVData:(NSData *)tlvData tag:(NSString *)tag;
+
+/**
+ *  解析获取TLV对象集合
+ *
+ *  @param tlvData tlvData
+ *
+ *  @return TLV对象集合
+ */
+- (NSArray *)tlvObjectsFromTLVData:(NSData *)tlvData;
+/**
+ *  解析获取TLV对象集合
+ *
+ *  @param tlvString tlvString
+ *
+ *  @return TLV对象集合
+ */
+- (NSArray *)tlvObjectsFromTLVString:(NSString *)tlvString;
 
 @end
