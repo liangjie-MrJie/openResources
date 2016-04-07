@@ -418,6 +418,7 @@
 				DC57C45C1A1C2E8900B24669 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		DC57C45D1A1C2E8900B24669 /* Build configuration list for PBXNativeTarget "LJieTLVParserTests" */ = {
 			isa = XCConfigurationList;
@@ -426,6 +427,7 @@
 				DC57C45F1A1C2E8900B24669 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

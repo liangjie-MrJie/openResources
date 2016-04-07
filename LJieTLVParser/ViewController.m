@@ -28,7 +28,9 @@
     
     NSData *dataTextField = [NSData dataWithBytes:bytes length:sizeof(bytes)];
     
-    LJieTLVParser * tlv = [[LJieTLVParser alloc] init];
+    LJieTLVParser *tlv = [[LJieTLVParser alloc] init];
+    
+    NSArray *a = [tlv tlObjectsFromTLString:@"9F7A019F02065F2A02"];
     
     NSData *result = [tlv valueFromTLVData:dataTextField tag:@"df0d"];
     NSLog(@"result: %@", result);

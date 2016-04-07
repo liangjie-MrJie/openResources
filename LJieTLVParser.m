@@ -86,6 +86,42 @@ static const char hexdigits[] = "0123456789ABCDEF";
     return [mArray copy];
 }
 
+- (NSArray *)tlObjectsFromTLString:(NSString *)tlString {
+    return [self tlObjectsFromTLData:[self hexStringToData:tlString strLen:tlString.length]];
+}
+- (NSArray *)tlObjectsFromTLData:(NSData *)tlData {
+    NSMutableArray *mArray = [[NSMutableArray alloc] init];
+    
+    while (tlData.length > 0) {
+        
+        NSData *tagData = nil;
+        NSData *lengthData = nil;
+        
+        int tagBytesCount = [self calcTagBytesCount:tlData];
+        if (tlData.length >= tagBytesCount) {
+            tagData = [tlData subdataWithRange:NSMakeRange(0, tagBytesCount)];
+            // progress
+            tlData = [tlData subdataWithRange:NSMakeRange(tagBytesCount, tlData.length - tagBytesCount)];
+        }
+        
+        int lengthBytesCount = [self calcLengthBytesCount:tlData];
+        if (tlData.length >= lengthBytesCount) {
+            NSUInteger index = lengthBytesCount > 1 ? 1 : 0;
+            NSUInteger len   = lengthBytesCount > 1 ? (lengthBytesCount-1) : lengthBytesCount;
+            lengthData = [tlData subdataWithRange:NSMakeRange(index, len)];
+            // progress
+            tlData = [tlData subdataWithRange:NSMakeRange(lengthBytesCount, tlData.length - lengthBytesCount)];
+        }
+        
+        TLV *tl = [[TLV alloc] init];
+        tl.t = tagData;
+        tl.l = lengthData;
+        
+        [mArray addObject:tl];
+    }
+    
+    return [mArray copy];
+}
 
 
 #pragma mark -- private method
@@ -158,7 +194,7 @@ static const char hexdigits[] = "0123456789ABCDEF";
     NSUInteger asciiLen = strLen/2;
     const char * hex = (char *)[hexStr UTF8String];
     char ascii[asciiLen];
-
+    
     for (int i = 0; i < strLen; i += 2)
     {
         if (hex[i] >= '0' && hex[i] <= '9')
@@ -176,7 +212,7 @@ static const char hexdigits[] = "0123456789ABCDEF";
             ascii[i / 2] += hex[i + 1] - 'A' + 10;
     }
     NSData * data = [NSData dataWithBytes:ascii length:asciiLen];
-
+    
     return data;
 }
 
@@ -193,6 +229,48 @@ static const char hexdigits[] = "0123456789ABCDEF";
     
     return nil;
 }
+
+@end
+
+@implementation LJieTLVParser (BlackMagic)
+
+- (NSData *)valueFromImpureTLVString:(NSString *)tlvString tag:(NSString *)tag
+{
+    return [self valueFromTLVData:[self hexStringToData:tlvString strLen:tlvString.length] tag:tag];
+}
+
+- (NSData *)valueFromImpureTLVData:(NSData *)tlvData tag:(NSString *)tag {
+    const Byte *tlvByte = [tlvData bytes];
+    NSData *tagData = [self hexStringToData:tag strLen:tag.length];
+    NSRange range = [tlvData rangeOfData:tagData options:NSDataSearchBackwards range:NSMakeRange(0, tlvData.length)];
+    if (range.location != NSNotFound) {
+        NSUInteger lenIndex = range.location +range.length;
+        Byte len = tlvByte[lenIndex];
+        if (len & 128) {
+            // len is many byte
+            NSUInteger addLen = len & 127;
+            NSData *lenData = [tlvData subdataWithRange:NSMakeRange(lenIndex +1, addLen)];
+            NSUInteger lenResult = 0;
+            [lenData getBytes:&lenResult length:addLen];
+            NSUInteger valueIndex = lenIndex + addLen + 1;
+            if (tlvData.length -valueIndex >= lenResult) {
+                NSData *value = [tlvData subdataWithRange:NSMakeRange(valueIndex, lenResult)];
+                return value;
+            }
+        }
+        else {
+            // len is one byte
+            NSUInteger valueIndex = lenIndex + 1;
+            if (tlvData.length -valueIndex >= len) {
+                NSData *value = [tlvData subdataWithRange:NSMakeRange(valueIndex, len)];
+                return value;
+            }
+        }
+    }
+    
+    return nil;
+}
+
 
 @end
 
